@@ -79,17 +79,17 @@ const uid=p=>p+'_'+Math.random().toString(36).slice(2,9);
 // === Supabase Backend ===
 const SUPABASE_URL = 'https://vokmtzkqstygfyjymqhj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZva210emtxc3R5Z2Z5anltcWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzY5MzMsImV4cCI6MjA5NjIxMjkzM30.Z5j-UyuV99nb-1NNUzxm-4_cXr9peXEZ-dzEuYtPTJU';
-let supabase = null;
+let sbClient = null;
 // Load Supabase SDK dynamically
 (function loadSDK(){
-  if (typeof supabase !== 'undefined' || typeof supabaseJs !== 'undefined') {
-    try { const SB = supabaseJs || supabase; supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e){}
-    return;
-  }
+  // Check window.supabase (UMD global), not local supabase (null)
+  const g = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabaseJs !== 'undefined' ? supabaseJs : null);
+  if (g) { try { sbClient = g.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e){} return; }
   const s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
   s.onload = function() {
-    try { const SB = supabaseJs || supabase; if (SB) { supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); sbInit(); } } catch(e){}
+    const g2 = window.supabase || supabaseJs;
+    if (g2) { try { sbClient = g2.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); sbInit(); } catch(e){} }
   };
   document.head.appendChild(s);
 })();
@@ -98,18 +98,18 @@ let supabase = null;
   try { const SB = supabaseJs || supabase; if (SB) supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn("Supabase init failed:", e); }
 
 async function sbFetch(table) {
-  if (!supabase) return null;
-  try { const { data } = await supabase.from(table).select("*"); return data; } catch(e) { console.warn("Supabase fetch error:", e); return null; }
+  if (!sbClient) return null;
+  try { const { data } = await sbClient.from(table).select("*"); return data; } catch(e) { console.warn("Supabase fetch error:", e); return null; }
 }
 
 async function sbUpsert(table, rows) {
-  if (!supabase || !rows?.length) return;
-  try { await supabase.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: false }); } catch(e) { console.warn("Supabase upsert error:", e); }
+  if (!sbClient || !rows?.length) return;
+  try { await sbClient.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: false }); } catch(e) { console.warn("Supabase upsert error:", e); }
 }
 
 async function sbDelete(table, id) {
-  if (!supabase || !id) return;
-  try { await supabase.from(table).delete().eq("id", id); } catch(e) { console.warn("Supabase delete error:", e); }
+  if (!sbClient || !id) return;
+  try { await sbClient.from(table).delete().eq("id", id); } catch(e) { console.warn("Supabase delete error:", e); }
 }
 
 // Override save() to also write to Supabase
@@ -135,27 +135,27 @@ function toCamel(obj) {
 const _origSave = save;
 save = function(silent) {
   _origSave(silent);
-  if (!supabase) return;
+  if (!sbClient) return;
   setTimeout(async () => {
     try {
-      if (state.users?.length) await supabase.from("users").upsert(state.users.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
-      if (state.circles?.length) await supabase.from("circles").upsert(state.circles.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
-      if (state.posts?.length) await supabase.from("posts").upsert(state.posts.map(p => toSnake({...p, images: [], comments: undefined})), { onConflict: "id", ignoreDuplicates: false });
+      if (state.users?.length) await sbClient.from("users").upsert(state.users.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
+      if (state.circles?.length) await sbClient.from("circles").upsert(state.circles.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
+      if (state.posts?.length) await sbClient.from("posts").upsert(state.posts.map(p => toSnake({...p, images: [], comments: undefined})), { onConflict: "id", ignoreDuplicates: false });
     } catch(e) { console.warn("Supabase save error:", e); }
   }, 0);
 };
 
 // Also fix sbInit() to properly load data
 async function sbInit() {
-  if (!supabase) return;
+  if (!sbClient) return;
   try {
-    const { data: users } = await supabase.from("users").select("*");
+    const { data: users } = await sbClient.from("users").select("*");
     if (users?.length) state.users = users.map(toCamel);
 
-    const { data: circles } = await supabase.from("circles").select("*");
+    const { data: circles } = await sbClient.from("circles").select("*");
     if (circles?.length) state.circles = circles.map(c => ({...toCamel(c), followed: c.followed || false}));
 
-    const { data: posts } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
+    const { data: posts } = await sbClient.from("posts").select("*").order("created_at", { ascending: false });
     if (posts?.length) {
       state.posts = posts.map(p => ({
         ...toCamel(p),
@@ -169,7 +169,7 @@ async function sbInit() {
       }));
     }
 
-    const { data: sbComments } = await supabase.from("comments").select("*").order("created_at", { ascending: true });
+    const { data: sbComments } = await sbClient.from("comments").select("*").order("created_at", { ascending: true });
     if (sbComments?.length) {
       const cmap = {};
       sbComments.forEach(c => {
@@ -183,7 +183,7 @@ async function sbInit() {
       state.posts.forEach(p => { if (cmap[p.id]) p.comments = cmap[p.id]; });
     }
 
-    const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({}));
+    const { data: { user: authUser } } = await sbClient.auth.getUser().catch(() => ({}));
     if (authUser) {
       const match = state.users.find(u => u.id === authUser.id);
       if (match) state.currentUserId = match.id;
@@ -195,7 +195,7 @@ async function sbInit() {
 const _origLoad = load;
 load = function() {
   const local = _origLoad();
-  if (!supabase) return local;
+  if (!sbClient) return local;
   return local;
 };
 
@@ -203,7 +203,7 @@ load = function() {
 const _origAddComment = addComment;
 addComment = function(pid, text) {
   _origAddComment(pid, text);
-  if (!supabase) return;
+  if (!sbClient) return;
   const p = post(pid);
   const c = p.comments[0];
   if (c) {
@@ -213,15 +213,15 @@ addComment = function(pid, text) {
 
 // Auth functions
 async function sbSignUp(email, password, name) {
-  if (!supabase) return toast("Supabase 未连接");
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+  if (!sbClient) return toast("Supabase 未连接");
+  const { data, error } = await sbClient.auth.signUp({ email, password, options: { data: { name } } });
   if (error) return toast("注册失败: " + error.message);
   toast("注册成功！请查收验证邮件");
 }
 
 async function sbSignIn(email, password) {
-  if (!supabase) return toast("Supabase 未连接");
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!sbClient) return toast("Supabase 未连接");
+  const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
   if (error) return toast("登录失败: " + error.message);
   const user = data.user;
   // Create or update local user
@@ -238,8 +238,8 @@ async function sbSignIn(email, password) {
 }
 
 async function sbSignOut() {
-  if (!supabase) return;
-  await supabase.auth.signOut();
+  if (!sbClient) return;
+  await sbClient.auth.signOut();
   state.currentUserId = "me";
   toast("已退出");
   render();
@@ -257,7 +257,7 @@ function openSBAuth() {
   $("sbLoginBtn").onclick = async () => {
     const email = $("sbEmail").value, pwd = $("sbPassword").value;
     if (!email || !pwd) return;
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+    const { error } = await sbClient.auth.signInWithPassword({ email, password: pwd });
     if (error) { $("sbAuthError").textContent = "失败: " + error.message; return; }
     await sbInit(); toast("登录成功！"); closeModal();
   };
@@ -265,17 +265,17 @@ function openSBAuth() {
     const email = $("sbEmail").value, pwd = $("sbPassword").value;
     if (!email || !pwd) return;
     const name = email.split("@")[0];
-    const { error } = await supabase.auth.signUp({ email, password: pwd, options: { data: { name } } });
+    const { error } = await sbClient.auth.signUp({ email, password: pwd, options: { data: { name } } });
     if (error) { $("sbAuthError").textContent = error.message; return; }
     $("sbAuthError").textContent = "注册成功！请查收验证邮件（检查垃圾箱）";
     $("sbAuthError").style.color = "var(--mint)";
   };
 }
 (async () => {
-  if (!supabase) return;
-  const { data: { session } } = await supabase.auth.getSession();
+  if (!sbClient) return;
+  const { data: { session } } = await sbClient.auth.getSession();
   if (session?.user) window._sbUser = session.user;
-  supabase.auth.onAuthStateChange((e, s) => { window._sbUser = s?.user || null; });
+  sbClient.auth.onAuthStateChange((e, s) => { window._sbUser = s?.user || null; });
 })();
 // Run Supabase init after page loads
 if (supabase) {
@@ -522,7 +522,7 @@ function reportPost(id){ const p=post(id); const reason=prompt('举报原因','�
 function blockUser(id){ if(id===me().id)return; state.blocked ||= []; if(!state.blocked.includes(id))state.blocked.push(id); notify('已屏蔽 '+user(id).name,'🚫','block'); save(); view.page='home'; render(); }
 function signIn(){ const today=new Date().toISOString().slice(0,10); if(state.daily.date===today&&state.daily.signed)return toast('今天已经签到了'); state.daily={date:today,signed:true}; me().coins=(me().coins||0)+10; notify('签到成功，获得 10 枚喵币','✅','task'); save(); render(); toast('签到成功 +10 喵币'); }
 document.addEventListener('click',e=>{ const btn=e.target.closest('[data-action]'); if(!btn)return; const a=btn.dataset.action; if(a==='nav'){view.page=btn.dataset.page; render(); return;} if(a==='switcher'){openSwitcher(); return;} if(a==='switch-account'){state.currentUserId=btn.dataset.id; view.profileId=btn.dataset.id; notify('已切换到 '+me().name,'🔁','account'); save(); closeModal(); view.page='profile'; render(); return;} if(a==='switch-circle'){view.circleId=btn.dataset.id; closeModal(); nav('circle'); return;} if(a==='new-account'){openNewAccount(); return;} if(a==='scroll-x'){const el=document.querySelector(`[data-scroll-id="${btn.dataset.target}"]`); if(el)el.scrollBy({left:Number(btn.dataset.dir||1)*Math.max(180,el.clientWidth*.75),behavior:'smooth'}); return;} if(a==='optimize-storage'){optimizeStateForStorage(true); save(true); toast('已清理大图、旧消息和重复头像缓存'); render(); return;} if(a==='assistant'){nav('assistant'); return;} if(a==='home-tab'){view.tab=btn.dataset.tab; view.page='home'; render(); return;} if(a==='jump-buddy'){view.tab='搭子'; view.board='全部'; view.page='home'; render(); return;} if(a==='hot-scope'){view.hotScope=btn.dataset.scope||'all'; if(view.hotScope==='circle'&&!view.circleId)view.circleId='c_hall'; render(); return;} if(a==='board'){view.board=btn.dataset.board; view.tab='最新'; view.page='home'; render(); return;} if(a==='compose'){openCompose({board:btn.dataset.board||undefined,circleId:btn.dataset.circleId||undefined,anon:btn.dataset.anon==='1'}); return;} if(a==='compose-anon'){openCompose({anon:true,board:'树洞',circleId:'c_tree'}); return;} if(a==='compose-circle'){openCompose({circleId:btn.dataset.id}); return;} if(a==='create-circle'){createCircle(); return;} if(a==='signin'){signIn(); return;} if(a==='auth'||a==='edit-profile'){openAuth(); return;} if(a==='theme'){state.theme=state.theme==='dark'?'light':'dark'; save(); render(); return;} if(a==='profile'){view.profileId=(btn.dataset.id==='me'?state.currentUserId:(btn.dataset.id||state.currentUserId)); view.page='profile'; render(); return;} if(a==='follow'){toggleFollow(btn.dataset.id); return;} if(a==='block'){blockUser(btn.dataset.id); return;} if(a==='circle'){view.circleId=btn.dataset.id; view.page='circle'; render(); return;} if(a==='circle-follow'){toggleCircle(btn.dataset.id); return;} if(a==='detail'){view.detailId=btn.dataset.id; view.page='detail'; closeModal(); render(); return;} if(a==='like'){likePost(btn.dataset.id); return;} if(a==='collect'){collectPost(btn.dataset.id); return;} if(a==='coin'){coinPost(btn.dataset.id); return;} if(a==='share'){navigator.clipboard?.writeText(location.href+'#'+btn.dataset.id); notify('已复制帖子分享信息','↗️','share'); toast('已复制分享信息'); return;} if(a==='report'){reportPost(btn.dataset.id); return;} if(a==='image'){openImage(btn.dataset.post,btn.dataset.index); return;} if(a==='search-word'){doSearch(btn.dataset.query||btn.textContent.replace('#','').trim()); return;} if(a==='search-type'){view.searchType=btn.dataset.type; renderSearch(); return;} if(a==='search-clear'){view.query=''; view.searchType='综合'; renderSearch(); return;} if(a==='clear-history'){state.searchHistory=[]; save(); renderSearch(); return;} if(a==='chat'){openChat(btn.dataset.id||'u_lan'); return;} if(a==='sort-comments'){view.commentSort=view.commentSort==='hot'?'new':'hot'; renderDetail(); return;} if(a==='comment-like'){const p=post(view.detailId); const c=p?.comments?.find(x=>x.id===btn.dataset.cid); if(c){c.likedBy ||= []; const on=c.likedBy.includes(me().id); if(on){c.likedBy=c.likedBy.filter(x=>x!==me().id); c.likes=Math.max(0,(c.likes||0)-1);}else{c.likedBy.push(me().id); c.likes=(c.likes||0)+1;} save(); renderDetail();} return;} if(a==='edit-circle-rules'){editCircleRules(btn.dataset.id); return;} if(a==='reply'){const text=prompt('回复这条评论'); if(text){ const p=post(view.detailId); const c=p.comments.find(x=>x.id===btn.dataset.cid); c.replies ||= []; c.replies.push({id:uid('rp'),userId:me().id,text,time:now(),likes:0}); notify('你回复了一条评论','💬','reply'); save(); renderDetail(); } return;} if(a==='sb-login'){openSBAuth(); return;}
-if(a==='sb-logout'){supabase?.auth.signOut(); state.currentUserId='me'; window._sbUser=null; toast('已退出'); sbInit(); return;}
+if(a==='sb-logout'){sbClient?.auth.signOut(); state.currentUserId='me'; window._sbUser=null; toast('已退出'); sbInit(); return;}
 if(a==='close'){closeModal(); return;} if(a==='remove-compose-img'){const i=Number(btn.dataset.index); composeImages.splice(i,1); $('#composePreview').innerHTML=composeImages.map((data,j)=>`<span class="previewWrap"><img class="preview" src="${data}"><button type="button" class="removeImg" data-action="remove-compose-img" data-index="${j}">×</button></span>`).join(''); $('#uploadStatus').textContent=`已准备 ${composeImages.length} 张图片`; return;} if(a==='clear-notices'){state.notifications=[]; save(); renderNotifications(); return;} if(a==='notice-open'){if(btn.dataset.id){view.detailId=btn.dataset.id; nav('detail');} return;} if(a==='report-done'){state.reports=state.reports.filter(r=>r.id!==btn.dataset.id); notify('后台已处理一条举报','🛡️','admin'); save(); renderAdmin(); return;} if(a==='make-hot'){const p={id:uid('p'),title:'官方活动：晒出你的期末续命瞬间',body:'带 #期末续命 标签发帖，点赞前十进入精华榜。',authorId:'u_lan',circleId:'c_hall',board:'生活',tags:['期末续命','活动','精华'],images:[poster('期末续命','🍵','#fff0fa','#e7fbff')],created:now(),likes:32,coins:8,collects:12,views:520,likedBy:[],collectedBy:[],coinedBy:[],essence:true,comments:[]}; state.posts.unshift(p); notify('运营活动已生成并推到大厅','🔥','admin'); save(); view.page='home'; view.tab='推荐'; render(); return;} if(a==='make-notice'){notify('系统通知：今晚 22:00 以后树洞开启匿名保护提醒','📣','system'); render(); return;} if(a==='reset-demo'){if(confirm('确定重置 V15.2 演示数据？')){localStorage.removeItem(KEY); OLD_KEYS.forEach(k=>localStorage.removeItem(k)); state=defaultState(); view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null}; render();} return;} });
 document.addEventListener('submit',e=>{ if(e.target.id==='globalSearch'){ e.preventDefault(); doSearch($('#globalSearchInput').value); } });
 $('#globalSearchInput').addEventListener('focus',()=>{ if(view.page!=='search'){view.page='search'; render();} });
