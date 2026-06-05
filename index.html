@@ -30,6 +30,7 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
 @media(min-width:880px){.app{width:min(100%,960px);padding-left:18px;padding-right:18px}.topbar{width:960px;max-width:100vw;left:50%;transform:translateX(-50%);border-radius:0 0 30px 30px}.heroMain{gap:18px}.heroAvatar{width:124px;height:124px;flex-basis:124px}.quickGrid{grid-template-columns:repeat(8,1fr)}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.feed>.empty{grid-column:1/-1}.post{height:max-content}.hotPostRank{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.hotPostItem:first-child{grid-column:1/-1}.buddyGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.circleGrid,.userGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.bottomNav{width:min(100%,760px);border-radius:32px;bottom:14px}.fab{right:max(22px,calc(50% - 480px + 22px));bottom:106px}.modal{width:min(760px,calc(100vw - 32px));border-radius:34px}.searchHero,.panel{padding:18px}.v152CommandDeck{grid-template-columns:1.35fr 1fr}}@media(max-width:540px){.app{padding-left:13px;padding-right:13px}.heroMain{align-items:flex-start}.heroAvatar{width:88px;height:88px;flex-basis:88px}.hero h1{font-size:21px}.v152HeroStats{grid-template-columns:repeat(2,1fr)}.v152CommandDeck{grid-template-columns:1fr}.quickGrid{grid-template-columns:repeat(4,1fr)}.buddyGrid{grid-template-columns:1fr}.hotPostItem{grid-template-columns:32px minmax(0,1fr);gap:8px}.hotPostHeat{grid-column:2;display:flex;gap:4px;border-left:0;padding-left:0;text-align:left}.panel{padding:14px}.bottomNav{border-radius:24px 24px 0 0;bottom:0}.modal{align-self:flex-end;border-radius:30px 30px 0 0;width:100%;max-height:88vh}.overlay{align-items:flex-end;padding:0}.fab{right:16px}.fab::after{display:none}}
 
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -74,6 +75,154 @@ const $=(s,r=document)=>r.querySelector(s); const $$=(s,r=document)=>Array.from(
 const now=()=>Date.now();
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));
 const uid=p=>p+'_'+Math.random().toString(36).slice(2,9);
+// === Supabase Backend ===
+const SUPABASE_URL = 'https://vokmtzkqstygfyjymqhj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZva210emtxc3R5Z2Z5anltcWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzY5MzMsImV4cCI6MjA5NjIxMjkzM30.Z5j-UyuV99nb-1NNUzxm-4_cXr9peXEZ-dzEuYtPTJU';
+let supabase = null;
+try { supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn("Supabase init failed:", e); }
+
+async function sbFetch(table) {
+  if (!supabase) return null;
+  try { const { data } = await supabase.from(table).select("*"); return data; } catch(e) { console.warn("Supabase fetch error:", e); return null; }
+}
+
+async function sbUpsert(table, rows) {
+  if (!supabase || !rows?.length) return;
+  try { await supabase.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: false }); } catch(e) { console.warn("Supabase upsert error:", e); }
+}
+
+async function sbDelete(table, id) {
+  if (!supabase || !id) return;
+  try { await supabase.from(table).delete().eq("id", id); } catch(e) { console.warn("Supabase delete error:", e); }
+}
+
+// Override save() to also write to Supabase
+const _origSave = save;
+save = function(silent) {
+  if (!supabase) return _origSave(silent);
+  _origSave(silent);
+  // Async push to Supabase
+  setTimeout(async () => {
+    try {
+      await sbUpsert("users", state.users);
+      await sbUpsert("circles", state.circles);
+      await sbUpsert("posts", state.posts);
+    } catch(e) { console.warn("Supabase sync error"); }
+  }, 0);
+};
+
+// Override load() to try Supabase first
+const _origLoad = load;
+load = function() {
+  const local = _origLoad();
+  if (!supabase) return local;
+  return local;
+};
+
+// Hybrid load: load from Supabase, fallback to local
+async function sbInit() {
+  if (!supabase) return;
+  try {
+    const { data: users } = await supabase.from("users").select("*");
+    if (users?.length) state.users = users;
+
+    const { data: circles } = await supabase.from("circles").select("*");
+    if (circles?.length) state.circles = circles;
+
+    const { data: posts } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
+    if (posts?.length) {
+      // Convert Supabase fields to local format
+      state.posts = posts.map(p => ({
+        id: p.id, title: p.title || "", body: p.body || "",
+        authorId: p.author_id, circleId: p.circle_id || "c_hall", board: p.board || "生活",
+        tags: p.tags || [], images: [], likes: p.likes || 0, coins: p.coins || 0,
+        collects: p.collects || 0, views: p.views || 0,
+        likedBy: p.liked_by || [], collectedBy: p.collected_by || [], coinedBy: p.coined_by || [],
+        essence: p.essence || false, comments: [], created: p.created_at ? new Date(p.created_at).getTime() : Date.now()
+      }));
+    }
+
+    const { data: comments } = await supabase.from("comments").select("*");
+    if (comments?.length) {
+      const cmap = {};
+      comments.forEach(c => {
+        if (!cmap[c.post_id]) cmap[c.post_id] = [];
+        cmap[c.post_id].push({
+          id: c.id, userId: c.user_id, text: c.text,
+          likes: c.likes || 0, likedBy: c.liked_by || [],
+          time: c.created_at ? new Date(c.created_at).getTime() : Date.now(), replies: []
+        });
+      });
+      state.posts.forEach(p => { if (cmap[p.id]) p.comments = cmap[p.id]; });
+    }
+
+    // Set current user
+    const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({}));
+    if (authUser) {
+      const match = state.users.find(u => u.id === authUser.id);
+      if (match) state.currentUserId = match.id;
+    }
+
+    render();
+  } catch(e) { console.warn("Supabase init error:", e); }
+}
+
+// Override save to also save comments
+const _origAddComment = addComment;
+addComment = function(pid, text) {
+  _origAddComment(pid, text);
+  if (!supabase) return;
+  const p = post(pid);
+  const c = p.comments[0];
+  if (c) {
+    sbUpsert("comments", [{ id: c.id, post_id: pid, user_id: c.userId, text: c.text, likes: 0, liked_by: [] }]);
+  }
+};
+
+// Auth functions
+async function sbSignUp(email, password, name) {
+  if (!supabase) return toast("Supabase 未连接");
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+  if (error) return toast("注册失败: " + error.message);
+  toast("注册成功！请查收验证邮件");
+}
+
+async function sbSignIn(email, password) {
+  if (!supabase) return toast("Supabase 未连接");
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return toast("登录失败: " + error.message);
+  const user = data.user;
+  // Create or update local user
+  let u = state.users.find(x => x.id === user.id);
+  if (!u) {
+    u = { id: user.id, name: user.user_metadata?.name || email.split("@")[0], avatar: "", major: "", school: "星澈大学", bio: "", coins: 30, followers: 0, following: [], badges: ["新同学"] };
+    state.users.push(u);
+    await sbUpsert("users", [u]);
+  }
+  state.currentUserId = user.id;
+  toast("登录成功！欢迎 " + u.name);
+  await sbInit();
+  render();
+}
+
+async function sbSignOut() {
+  if (!supabase) return;
+  await supabase.auth.signOut();
+  state.currentUserId = "me";
+  toast("已退出");
+  render();
+}
+
+// Run Supabase init after page loads
+if (supabase) {
+  const _origRender = render;
+  render = function() {
+    if (window._sbInitialized) { _origRender(); return; }
+    window._sbInitialized = true;
+    sbInit().then(() => { _origRender(); }).catch(() => _origRender());
+  };
+}
+
 function defaultCircleRules(c){
  const name=(c?.name||'表达吧');
  if(c?.id==='c_tree')return ['匿名不等于攻击','不挂人不泄露隐私','情绪求助优先友善回应'];
