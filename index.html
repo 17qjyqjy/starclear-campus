@@ -344,7 +344,7 @@ function hydrateState(s){
 }
 function migrate(s){ const d=defaultState(); for(const k of Object.keys(d)){ if(s[k]===undefined) s[k]=d[k]; } if(!s.version||s.version<15){ s.version=15; if(!s.posts?.length) s.posts=d.posts; } return hydrateState(s); }
 async function load(){ try{ var raw=localStorage.getItem(KEY); if(raw) return migrate(JSON.parse(raw)); }catch(e){} return await sbLoad(); }
-let state;
+let state=defaultState();
 let view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null};
 let composeImages=[], composeUploading=false, chatImage=null;
 function packState(src,aggressive=false){
