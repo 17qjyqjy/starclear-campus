@@ -87,13 +87,23 @@ document.getElementById("sb-auth-register").addEventListener("click", async func
 \n</script>
 </head>
 <body><div id="auth-root" style="display:none;width:min(100%,540px);margin:40px auto;padding:0 14px">
-  <div style="text-align:center;padding:20px 0">
-    <h1 style="font-size:28px;margin-bottom:8px;color:var(--text)">星澜校园表达吧</h1>
-    <p style="color:var(--muted);margin-bottom:24px">登录后即可浏览校园社区</p>
-  </div>
-  <div style="background:var(--card);border:1px solid var(--line);border-radius:26px;padding:20px;box-shadow:var(--shadow)">
-    <form id="sb-auth-form">
-      <div class="field"><label>邮箱</label><input id="sb-auth-email" type="email" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
+<section class="hero" style="margin:8px 0 14px;position:relative;overflow:hidden;background:linear-gradient(135deg,#fff,#fff0fa 50%,#e8fbff);border:1px solid rgba(255,255,255,.8);border-radius:34px;padding:14px;box-shadow:var(--shadow)">
+<div class="heroMain" style="position:relative;z-index:1;display:flex;gap:14px;align-items:center">
+<div style="width:80px;height:80px;border-radius:24px;background:linear-gradient(135deg,#ff6db7,#8c7cff);display:grid;place-items:center;font-size:40px;border:4px solid #fff;box-shadow:0 13px 25px rgba(255,109,183,.24);flex:0 0 auto">🌟</div>
+<div><span class="badge">星澜校园</span>
+<h1 style="font-size:23px;line-height:1.15;margin:8px 0 8px;color:var(--text)">欢迎回来</h1>
+<p style="margin:0;color:#645d72;font-size:13px;line-height:1.55">登录后即可浏览、发帖、互动，数据实时同步</p>
+</div></div></section>
+<div style="background:var(--card);border:1px solid var(--line);border-radius:26px;padding:20px;box-shadow:var(--shadow)">
+<form id="sb-auth-form">
+<div class="field"><label>邮箱</label><input id="sb-auth-email" type="email" placeholder="输入你的校园邮箱" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
+<div class="field" style="margin-top:12px"><label>密码</label><input id="sb-auth-pass" type="password" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
+<div style="display:flex;gap:8px;margin-top:16px">
+<button type="submit" class="pill" style="flex:1;border:0;border-radius:18px;padding:13px;background:linear-gradient(135deg,#ff6db7,#8c7cff);color:#fff;font-weight:1000;cursor:pointer;font-size:16px;box-shadow:0 13px 25px rgba(255,109,183,.24)">登录</button>
+<button id="sb-auth-register" type="button" style="flex:1;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:18px;padding:13px;font-weight:1000;cursor:pointer;font-size:16px">注册</button>
+</div></form>
+<div id="sb-auth-error" style="color:#ff5570;font-weight:900;font-size:14px;margin-top:12px;display:none;text-align:center;padding:8px;background:rgba(255,85,112,.08);border-radius:14px"></div>
+</div></div>
       <div class="field" style="margin-top:10px"><label>密码</label><input id="sb-auth-pass" type="password" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button id="sb-auth-login" type="submit" style="flex:1;border:0;border-radius:18px;padding:13px;background:linear-gradient(135deg,#ff6db7,#8c7cff);color:#fff;font-weight:1000;cursor:pointer;font-size:16px">登录</button>
@@ -185,7 +195,7 @@ async function sbLoad() {
     }
     
     return { users: appUsers, currentUserId: _sbUser ? _sbUser.id : "me",
-      posts: appPosts, circles: [], messages: {}, notifications: [],
+      posts: appPosts, circles: [{id:"c_hall",name:"大厅",emoji:"🌐",desc:"全校公共表达区域",members:0,owner:"u_system",followed:true,notice:"欢迎来到大厅",rules:["尊重同学"]},{id:"c_tree",name:"树洞",emoji:"🕳️",desc:"匿名倾诉秘密分享",members:0,owner:"u_system",followed:true,notice:"这里是树洞",rules:["匿名即可"]}], messages: {}, notifications: [],
       reports: [], searchHistory: [], blocked: [], daily: {}, theme: "light" };
   } catch(e) { console.warn("sbLoad", e); return defaultState(); }
 }
