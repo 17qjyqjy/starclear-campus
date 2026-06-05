@@ -197,7 +197,16 @@ function notify(text,icon='🔔',type='system'){ state.notifications.unshift({id
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>t.classList.remove('show'),1800); }
 function timeAgo(ts){ const d=Math.max(1,Math.floor((now()-ts)/1000)); if(d<60)return d+'秒前'; if(d<3600)return Math.floor(d/60)+'分钟前'; if(d<86400)return Math.floor(d/3600)+'小时前'; return Math.floor(d/86400)+'天前'; }
 function activatePage(p){ $$('.page').forEach(x=>x.classList.remove('active')); const el=$('#page-'+p); if(el)el.classList.add('active'); $$('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===p || (p==='detail'&&n.dataset.page==='home') || (p==='circle'&&n.dataset.page==='circles'))); updateBadges(); }
-function nav(page){ view.page=page; if(page==='profile'&&!view.profileId)view.profileId=state.currentUserId; render(); }
+function nav(page){ view.page=page; if(page==='profile'&&!view.profileId)view.profileId=state.currentUserId; window.addEventListener('error',function(e){
+  var p=document.getElementById('page-home');
+  if(p)p.innerHTML='<div style="padding:20px;color:#e33;background:#fff;border-radius:16px;margin:16px"><h2>JS Error</h2><pre style="white-space:pre-wrap">'+e.message+'</pre></div>';
+});
+try{
+  render();
+}catch(e){
+  var p=document.getElementById('page-home');
+  if(p)p.innerHTML='<div style="padding:20px;color:#e33;background:#fff;border-radius:16px;margin:16px"><h2>Render Error</h2><pre>'+e.message+'</pre><pre style="font-size:12px">'+(e.stack||'')+'</pre></div>';
+} }
 function updateBadges(){ const d=$('#noticeDot'); if(d)d.textContent=unreadCount(); const top=$('#topAvatar'); if(top)top.src=me().avatar||AVATAR; document.documentElement.dataset.theme=state.theme||'light'; }
 function render(){ activatePage(view.page); const input=$('#globalSearchInput'); if(input && view.page!=='search') input.value=view.query||''; if(view.page==='home')renderHome(); if(view.page==='search')renderSearch(); if(view.page==='circles')renderCircles(); if(view.page==='circle')renderCircle(); if(view.page==='messages')renderMessages(); if(view.page==='profile')renderProfile(); if(view.page==='detail')renderDetail(); if(view.page==='notifications')renderNotifications(); if(view.page==='admin')renderAdmin(); if(view.page==='assistant')renderAssistant(); enhanceHorizontalScroll(); }
 function matchBoard(p){ return view.board==='全部'||p.board===view.board; }
