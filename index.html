@@ -39,6 +39,7 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
   <form class="globalSearch" id="globalSearch"><span>🔎</span><input id="globalSearchInput" placeholder="搜帖子/用户/表达吧/标签"><button>搜</button></form>
   <button class="iconBtn" data-action="switcher" title="切换账号/表达吧">🔁</button>
   <button class="iconBtn" data-action="nav" data-page="notifications">🔔<span class="dot" id="noticeDot">0</span></button>
+  <button class="iconBtn" data-action="sb-login" title="Supabase登录">🔐</button>
 </header>
 <main id="main">
   <section class="page active" id="page-home"></section>
@@ -116,6 +117,7 @@ function toCamel(obj) {
 }
 
 // Override save() to convert field names
+const _origSave = save;
 save = function(silent) {
   _origSave(silent);
   if (!supabase) return;
@@ -182,54 +184,6 @@ load = function() {
   return local;
 };
 
-// Hybrid load: load from Supabase, fallback to local
-async function sbInit() {
-  if (!supabase) return;
-  try {
-    const { data: users } = await supabase.from("users").select("*");
-    if (users?.length) state.users = users;
-
-    const { data: circles } = await supabase.from("circles").select("*");
-    if (circles?.length) state.circles = circles;
-
-    const { data: posts } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
-    if (posts?.length) {
-      // Convert Supabase fields to local format
-      state.posts = posts.map(p => ({
-        id: p.id, title: p.title || "", body: p.body || "",
-        authorId: p.author_id, circleId: p.circle_id || "c_hall", board: p.board || "生活",
-        tags: p.tags || [], images: [], likes: p.likes || 0, coins: p.coins || 0,
-        collects: p.collects || 0, views: p.views || 0,
-        likedBy: p.liked_by || [], collectedBy: p.collected_by || [], coinedBy: p.coined_by || [],
-        essence: p.essence || false, comments: [], created: p.created_at ? new Date(p.created_at).getTime() : Date.now()
-      }));
-    }
-
-    const { data: comments } = await supabase.from("comments").select("*");
-    if (comments?.length) {
-      const cmap = {};
-      comments.forEach(c => {
-        if (!cmap[c.post_id]) cmap[c.post_id] = [];
-        cmap[c.post_id].push({
-          id: c.id, userId: c.user_id, text: c.text,
-          likes: c.likes || 0, likedBy: c.liked_by || [],
-          time: c.created_at ? new Date(c.created_at).getTime() : Date.now(), replies: []
-        });
-      });
-      state.posts.forEach(p => { if (cmap[p.id]) p.comments = cmap[p.id]; });
-    }
-
-    // Set current user
-    const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({}));
-    if (authUser) {
-      const match = state.users.find(u => u.id === authUser.id);
-      if (match) state.currentUserId = match.id;
-    }
-
-    render();
-  } catch(e) { console.warn("Supabase init error:", e); }
-}
-
 // Override save to also save comments
 const _origAddComment = addComment;
 addComment = function(pid, text) {
@@ -276,6 +230,38 @@ async function sbSignOut() {
   render();
 }
 
+
+function openSBAuth() {
+  openModal(`<div class="modalHead"><h3>${window._sbUser ? "账号设置" : "登录 / 注册 Supabase"}</h3><button class="close" data-action="close">x</button></div>${
+    window._sbUser
+      ? `<section class="panel"><p>当前：<b>${esc(window._sbUser.email)}</b></p><div class="heroActions"><button class="pill" data-action="sb-logout">退出登录</button></div></section>`
+      : `<form class="form" id="sbAuthForm"><div class="field"><label>邮箱</label><input id="sbEmail" type="email" placeholder="邮箱" required></div><div class="field"><label>密码（至少6位）</label><input id="sbPassword" type="password" placeholder="密码" required></div><div id="sbAuthError" style="color:var(--red);font-size:13px;margin:4px 0"></div><div class="heroActions"><button class="pill" type="button" id="sbLoginBtn">登录</button><button class="ghost" type="button" id="sbRegisterBtn">注册</button></div></form>`
+  }`);
+  if (window._sbUser) return;
+  const $ = id => document.getElementById(id);
+  $("sbLoginBtn").onclick = async () => {
+    const email = $("sbEmail").value, pwd = $("sbPassword").value;
+    if (!email || !pwd) return;
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+    if (error) { $("sbAuthError").textContent = "失败: " + error.message; return; }
+    await sbInit(); toast("登录成功！"); closeModal();
+  };
+  $("sbRegisterBtn").onclick = async () => {
+    const email = $("sbEmail").value, pwd = $("sbPassword").value;
+    if (!email || !pwd) return;
+    const name = email.split("@")[0];
+    const { error } = await supabase.auth.signUp({ email, password: pwd, options: { data: { name } } });
+    if (error) { $("sbAuthError").textContent = error.message; return; }
+    $("sbAuthError").textContent = "注册成功！请查收验证邮件（检查垃圾箱）";
+    $("sbAuthError").style.color = "var(--mint)";
+  };
+}
+(async () => {
+  if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) window._sbUser = session.user;
+  supabase.auth.onAuthStateChange((e, s) => { window._sbUser = s?.user || null; });
+})();
 // Run Supabase init after page loads
 if (supabase) {
   const _origRender = render;
@@ -518,7 +504,9 @@ function createCircle(){ openModal(`<div class="modalHead"><h3>建立表达吧</
 function reportPost(id){ const p=post(id); const reason=prompt('举报原因','疑似违规/广告/骚扰'); if(!reason)return; state.reports.unshift({id:uid('r'),postId:id,reason:'举报《'+p.title+'》：'+reason,time:now()}); notify('举报已提交到后台模拟','🚩','report'); save(); render(); }
 function blockUser(id){ if(id===me().id)return; state.blocked ||= []; if(!state.blocked.includes(id))state.blocked.push(id); notify('已屏蔽 '+user(id).name,'🚫','block'); save(); view.page='home'; render(); }
 function signIn(){ const today=new Date().toISOString().slice(0,10); if(state.daily.date===today&&state.daily.signed)return toast('今天已经签到了'); state.daily={date:today,signed:true}; me().coins=(me().coins||0)+10; notify('签到成功，获得 10 枚喵币','✅','task'); save(); render(); toast('签到成功 +10 喵币'); }
-document.addEventListener('click',e=>{ const btn=e.target.closest('[data-action]'); if(!btn)return; const a=btn.dataset.action; if(a==='nav'){view.page=btn.dataset.page; render(); return;} if(a==='switcher'){openSwitcher(); return;} if(a==='switch-account'){state.currentUserId=btn.dataset.id; view.profileId=btn.dataset.id; notify('已切换到 '+me().name,'🔁','account'); save(); closeModal(); view.page='profile'; render(); return;} if(a==='switch-circle'){view.circleId=btn.dataset.id; closeModal(); nav('circle'); return;} if(a==='new-account'){openNewAccount(); return;} if(a==='scroll-x'){const el=document.querySelector(`[data-scroll-id="${btn.dataset.target}"]`); if(el)el.scrollBy({left:Number(btn.dataset.dir||1)*Math.max(180,el.clientWidth*.75),behavior:'smooth'}); return;} if(a==='optimize-storage'){optimizeStateForStorage(true); save(true); toast('已清理大图、旧消息和重复头像缓存'); render(); return;} if(a==='assistant'){nav('assistant'); return;} if(a==='home-tab'){view.tab=btn.dataset.tab; view.page='home'; render(); return;} if(a==='jump-buddy'){view.tab='搭子'; view.board='全部'; view.page='home'; render(); return;} if(a==='hot-scope'){view.hotScope=btn.dataset.scope||'all'; if(view.hotScope==='circle'&&!view.circleId)view.circleId='c_hall'; render(); return;} if(a==='board'){view.board=btn.dataset.board; view.tab='最新'; view.page='home'; render(); return;} if(a==='compose'){openCompose({board:btn.dataset.board||undefined,circleId:btn.dataset.circleId||undefined,anon:btn.dataset.anon==='1'}); return;} if(a==='compose-anon'){openCompose({anon:true,board:'树洞',circleId:'c_tree'}); return;} if(a==='compose-circle'){openCompose({circleId:btn.dataset.id}); return;} if(a==='create-circle'){createCircle(); return;} if(a==='signin'){signIn(); return;} if(a==='auth'||a==='edit-profile'){openAuth(); return;} if(a==='theme'){state.theme=state.theme==='dark'?'light':'dark'; save(); render(); return;} if(a==='profile'){view.profileId=(btn.dataset.id==='me'?state.currentUserId:(btn.dataset.id||state.currentUserId)); view.page='profile'; render(); return;} if(a==='follow'){toggleFollow(btn.dataset.id); return;} if(a==='block'){blockUser(btn.dataset.id); return;} if(a==='circle'){view.circleId=btn.dataset.id; view.page='circle'; render(); return;} if(a==='circle-follow'){toggleCircle(btn.dataset.id); return;} if(a==='detail'){view.detailId=btn.dataset.id; view.page='detail'; closeModal(); render(); return;} if(a==='like'){likePost(btn.dataset.id); return;} if(a==='collect'){collectPost(btn.dataset.id); return;} if(a==='coin'){coinPost(btn.dataset.id); return;} if(a==='share'){navigator.clipboard?.writeText(location.href+'#'+btn.dataset.id); notify('已复制帖子分享信息','↗️','share'); toast('已复制分享信息'); return;} if(a==='report'){reportPost(btn.dataset.id); return;} if(a==='image'){openImage(btn.dataset.post,btn.dataset.index); return;} if(a==='search-word'){doSearch(btn.dataset.query||btn.textContent.replace('#','').trim()); return;} if(a==='search-type'){view.searchType=btn.dataset.type; renderSearch(); return;} if(a==='search-clear'){view.query=''; view.searchType='综合'; renderSearch(); return;} if(a==='clear-history'){state.searchHistory=[]; save(); renderSearch(); return;} if(a==='chat'){openChat(btn.dataset.id||'u_lan'); return;} if(a==='sort-comments'){view.commentSort=view.commentSort==='hot'?'new':'hot'; renderDetail(); return;} if(a==='comment-like'){const p=post(view.detailId); const c=p?.comments?.find(x=>x.id===btn.dataset.cid); if(c){c.likedBy ||= []; const on=c.likedBy.includes(me().id); if(on){c.likedBy=c.likedBy.filter(x=>x!==me().id); c.likes=Math.max(0,(c.likes||0)-1);}else{c.likedBy.push(me().id); c.likes=(c.likes||0)+1;} save(); renderDetail();} return;} if(a==='edit-circle-rules'){editCircleRules(btn.dataset.id); return;} if(a==='reply'){const text=prompt('回复这条评论'); if(text){ const p=post(view.detailId); const c=p.comments.find(x=>x.id===btn.dataset.cid); c.replies ||= []; c.replies.push({id:uid('rp'),userId:me().id,text,time:now(),likes:0}); notify('你回复了一条评论','💬','reply'); save(); renderDetail(); } return;} if(a==='close'){closeModal(); return;} if(a==='remove-compose-img'){const i=Number(btn.dataset.index); composeImages.splice(i,1); $('#composePreview').innerHTML=composeImages.map((data,j)=>`<span class="previewWrap"><img class="preview" src="${data}"><button type="button" class="removeImg" data-action="remove-compose-img" data-index="${j}">×</button></span>`).join(''); $('#uploadStatus').textContent=`已准备 ${composeImages.length} 张图片`; return;} if(a==='clear-notices'){state.notifications=[]; save(); renderNotifications(); return;} if(a==='notice-open'){if(btn.dataset.id){view.detailId=btn.dataset.id; nav('detail');} return;} if(a==='report-done'){state.reports=state.reports.filter(r=>r.id!==btn.dataset.id); notify('后台已处理一条举报','🛡️','admin'); save(); renderAdmin(); return;} if(a==='make-hot'){const p={id:uid('p'),title:'官方活动：晒出你的期末续命瞬间',body:'带 #期末续命 标签发帖，点赞前十进入精华榜。',authorId:'u_lan',circleId:'c_hall',board:'生活',tags:['期末续命','活动','精华'],images:[poster('期末续命','🍵','#fff0fa','#e7fbff')],created:now(),likes:32,coins:8,collects:12,views:520,likedBy:[],collectedBy:[],coinedBy:[],essence:true,comments:[]}; state.posts.unshift(p); notify('运营活动已生成并推到大厅','🔥','admin'); save(); view.page='home'; view.tab='推荐'; render(); return;} if(a==='make-notice'){notify('系统通知：今晚 22:00 以后树洞开启匿名保护提醒','📣','system'); render(); return;} if(a==='reset-demo'){if(confirm('确定重置 V15.2 演示数据？')){localStorage.removeItem(KEY); OLD_KEYS.forEach(k=>localStorage.removeItem(k)); state=defaultState(); view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null}; render();} return;} });
+document.addEventListener('click',e=>{ const btn=e.target.closest('[data-action]'); if(!btn)return; const a=btn.dataset.action; if(a==='nav'){view.page=btn.dataset.page; render(); return;} if(a==='switcher'){openSwitcher(); return;} if(a==='switch-account'){state.currentUserId=btn.dataset.id; view.profileId=btn.dataset.id; notify('已切换到 '+me().name,'🔁','account'); save(); closeModal(); view.page='profile'; render(); return;} if(a==='switch-circle'){view.circleId=btn.dataset.id; closeModal(); nav('circle'); return;} if(a==='new-account'){openNewAccount(); return;} if(a==='scroll-x'){const el=document.querySelector(`[data-scroll-id="${btn.dataset.target}"]`); if(el)el.scrollBy({left:Number(btn.dataset.dir||1)*Math.max(180,el.clientWidth*.75),behavior:'smooth'}); return;} if(a==='optimize-storage'){optimizeStateForStorage(true); save(true); toast('已清理大图、旧消息和重复头像缓存'); render(); return;} if(a==='assistant'){nav('assistant'); return;} if(a==='home-tab'){view.tab=btn.dataset.tab; view.page='home'; render(); return;} if(a==='jump-buddy'){view.tab='搭子'; view.board='全部'; view.page='home'; render(); return;} if(a==='hot-scope'){view.hotScope=btn.dataset.scope||'all'; if(view.hotScope==='circle'&&!view.circleId)view.circleId='c_hall'; render(); return;} if(a==='board'){view.board=btn.dataset.board; view.tab='最新'; view.page='home'; render(); return;} if(a==='compose'){openCompose({board:btn.dataset.board||undefined,circleId:btn.dataset.circleId||undefined,anon:btn.dataset.anon==='1'}); return;} if(a==='compose-anon'){openCompose({anon:true,board:'树洞',circleId:'c_tree'}); return;} if(a==='compose-circle'){openCompose({circleId:btn.dataset.id}); return;} if(a==='create-circle'){createCircle(); return;} if(a==='signin'){signIn(); return;} if(a==='auth'||a==='edit-profile'){openAuth(); return;} if(a==='theme'){state.theme=state.theme==='dark'?'light':'dark'; save(); render(); return;} if(a==='profile'){view.profileId=(btn.dataset.id==='me'?state.currentUserId:(btn.dataset.id||state.currentUserId)); view.page='profile'; render(); return;} if(a==='follow'){toggleFollow(btn.dataset.id); return;} if(a==='block'){blockUser(btn.dataset.id); return;} if(a==='circle'){view.circleId=btn.dataset.id; view.page='circle'; render(); return;} if(a==='circle-follow'){toggleCircle(btn.dataset.id); return;} if(a==='detail'){view.detailId=btn.dataset.id; view.page='detail'; closeModal(); render(); return;} if(a==='like'){likePost(btn.dataset.id); return;} if(a==='collect'){collectPost(btn.dataset.id); return;} if(a==='coin'){coinPost(btn.dataset.id); return;} if(a==='share'){navigator.clipboard?.writeText(location.href+'#'+btn.dataset.id); notify('已复制帖子分享信息','↗️','share'); toast('已复制分享信息'); return;} if(a==='report'){reportPost(btn.dataset.id); return;} if(a==='image'){openImage(btn.dataset.post,btn.dataset.index); return;} if(a==='search-word'){doSearch(btn.dataset.query||btn.textContent.replace('#','').trim()); return;} if(a==='search-type'){view.searchType=btn.dataset.type; renderSearch(); return;} if(a==='search-clear'){view.query=''; view.searchType='综合'; renderSearch(); return;} if(a==='clear-history'){state.searchHistory=[]; save(); renderSearch(); return;} if(a==='chat'){openChat(btn.dataset.id||'u_lan'); return;} if(a==='sort-comments'){view.commentSort=view.commentSort==='hot'?'new':'hot'; renderDetail(); return;} if(a==='comment-like'){const p=post(view.detailId); const c=p?.comments?.find(x=>x.id===btn.dataset.cid); if(c){c.likedBy ||= []; const on=c.likedBy.includes(me().id); if(on){c.likedBy=c.likedBy.filter(x=>x!==me().id); c.likes=Math.max(0,(c.likes||0)-1);}else{c.likedBy.push(me().id); c.likes=(c.likes||0)+1;} save(); renderDetail();} return;} if(a==='edit-circle-rules'){editCircleRules(btn.dataset.id); return;} if(a==='reply'){const text=prompt('回复这条评论'); if(text){ const p=post(view.detailId); const c=p.comments.find(x=>x.id===btn.dataset.cid); c.replies ||= []; c.replies.push({id:uid('rp'),userId:me().id,text,time:now(),likes:0}); notify('你回复了一条评论','💬','reply'); save(); renderDetail(); } return;} if(a==='sb-login'){openSBAuth(); return;}
+if(a==='sb-logout'){supabase?.auth.signOut(); state.currentUserId='me'; window._sbUser=null; toast('已退出'); sbInit(); return;}
+if(a==='close'){closeModal(); return;} if(a==='remove-compose-img'){const i=Number(btn.dataset.index); composeImages.splice(i,1); $('#composePreview').innerHTML=composeImages.map((data,j)=>`<span class="previewWrap"><img class="preview" src="${data}"><button type="button" class="removeImg" data-action="remove-compose-img" data-index="${j}">×</button></span>`).join(''); $('#uploadStatus').textContent=`已准备 ${composeImages.length} 张图片`; return;} if(a==='clear-notices'){state.notifications=[]; save(); renderNotifications(); return;} if(a==='notice-open'){if(btn.dataset.id){view.detailId=btn.dataset.id; nav('detail');} return;} if(a==='report-done'){state.reports=state.reports.filter(r=>r.id!==btn.dataset.id); notify('后台已处理一条举报','🛡️','admin'); save(); renderAdmin(); return;} if(a==='make-hot'){const p={id:uid('p'),title:'官方活动：晒出你的期末续命瞬间',body:'带 #期末续命 标签发帖，点赞前十进入精华榜。',authorId:'u_lan',circleId:'c_hall',board:'生活',tags:['期末续命','活动','精华'],images:[poster('期末续命','🍵','#fff0fa','#e7fbff')],created:now(),likes:32,coins:8,collects:12,views:520,likedBy:[],collectedBy:[],coinedBy:[],essence:true,comments:[]}; state.posts.unshift(p); notify('运营活动已生成并推到大厅','🔥','admin'); save(); view.page='home'; view.tab='推荐'; render(); return;} if(a==='make-notice'){notify('系统通知：今晚 22:00 以后树洞开启匿名保护提醒','📣','system'); render(); return;} if(a==='reset-demo'){if(confirm('确定重置 V15.2 演示数据？')){localStorage.removeItem(KEY); OLD_KEYS.forEach(k=>localStorage.removeItem(k)); state=defaultState(); view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null}; render();} return;} });
 document.addEventListener('submit',e=>{ if(e.target.id==='globalSearch'){ e.preventDefault(); doSearch($('#globalSearchInput').value); } });
 $('#globalSearchInput').addEventListener('focus',()=>{ if(view.page!=='search'){view.page='search'; render();} });
 $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
