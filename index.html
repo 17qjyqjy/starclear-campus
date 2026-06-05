@@ -62,6 +62,14 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
 </nav>
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
+
+<div id="al" style="display:none;position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at 2% 0,#ffe2f1 0 170px,transparent 340px),radial-gradient(circle at 100% 5%,#d9f9ff 0 180px,transparent 360px),linear-gradient(145deg,#fff7fb,#eefcff);place-items:center;padding:20px">
+<div style="width:min(100%,380px);margin:0;background:var(--card);border:1px solid var(--line);border-radius:28px;padding:28px;box-shadow:var(--shadow)">
+<div style="text-align:center;margin-bottom:24px">
+<div style="width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#ff6db7,#8c7cff);display:grid;place-items:center;font-size:26px;margin:0 auto 12px;border:3px solid #fff;box-shadow:0 10px 24px rgba(130,72,60,.18)">&#x1f31f;</div>
+<b style="font-size:20px;color:var(--text)">星澜校园表达吧</b>
+<p style="margin:6px 0 0;color:var(--muted);font-size:13px">登录使用校园社区</p>
+</div>
 <script>
 var SU='https://vokmtzkqstygfyjymqhj.supabase.co';
 var SA='sb_publishable_wM4-VEvXqnDPFipQqZLlmg_t-WDIqLv';
@@ -380,13 +388,7 @@ try{var x=await _sbreg({email:em,password:pw});if(x&&x.d){document.getElementByI
 });
 function save(silent){try{localStorage.setItem(KEY,JSON.stringify(packState(state,false)))}catch(e){}save2()}</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"4c38b9d5fea24014af64d41ff4d13eb2","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<div id="al" style="display:none;position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at 2% 0,#ffe2f1 0 170px,transparent 340px),radial-gradient(circle at 100% 5%,#d9f9ff 0 180px,transparent 360px),linear-gradient(145deg,#fff7fb,#eefcff);place-items:center;padding:20px">
-<div style="width:min(100%,380px);margin:0;background:var(--card);border:1px solid var(--line);border-radius:28px;padding:28px;box-shadow:var(--shadow)">
-<div style="text-align:center;margin-bottom:24px">
-<div style="width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#ff6db7,#8c7cff);display:grid;place-items:center;font-size:26px;margin:0 auto 12px;border:3px solid #fff;box-shadow:0 10px 24px rgba(130,72,60,.18)">&#x1f31f;</div>
-<b style="font-size:20px;color:var(--text)">星澜校园表达吧</b>
-<p style="margin:6px 0 0;color:var(--muted);font-size:13px">登录使用校园社区</p>
-</div>
+
 <form id="af">
 <input id="ae" type="email" placeholder="邮箱" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:16px;padding:12px 14px;outline:0;font:inherit;color:var(--text);box-sizing:border-box;margin-bottom:12px">
 <input id="ap" type="password" placeholder="密码" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:16px;padding:12px 14px;outline:0;font:inherit;color:var(--text);box-sizing:border-box;margin-bottom:20px">
