@@ -30,7 +30,6 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
 @media(min-width:880px){.app{width:min(100%,960px);padding-left:18px;padding-right:18px}.topbar{width:960px;max-width:100vw;left:50%;transform:translateX(-50%);border-radius:0 0 30px 30px}.heroMain{gap:18px}.heroAvatar{width:124px;height:124px;flex-basis:124px}.quickGrid{grid-template-columns:repeat(8,1fr)}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.feed>.empty{grid-column:1/-1}.post{height:max-content}.hotPostRank{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.hotPostItem:first-child{grid-column:1/-1}.buddyGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.circleGrid,.userGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.bottomNav{width:min(100%,760px);border-radius:32px;bottom:14px}.fab{right:max(22px,calc(50% - 480px + 22px));bottom:106px}.modal{width:min(760px,calc(100vw - 32px));border-radius:34px}.searchHero,.panel{padding:18px}.v152CommandDeck{grid-template-columns:1.35fr 1fr}}@media(max-width:540px){.app{padding-left:13px;padding-right:13px}.heroMain{align-items:flex-start}.heroAvatar{width:88px;height:88px;flex-basis:88px}.hero h1{font-size:21px}.v152HeroStats{grid-template-columns:repeat(2,1fr)}.v152CommandDeck{grid-template-columns:1fr}.quickGrid{grid-template-columns:repeat(4,1fr)}.buddyGrid{grid-template-columns:1fr}.hotPostItem{grid-template-columns:32px minmax(0,1fr);gap:8px}.hotPostHeat{grid-column:2;display:flex;gap:4px;border-left:0;padding-left:0;text-align:left}.panel{padding:14px}.bottomNav{border-radius:24px 24px 0 0;bottom:0}.modal{align-self:flex-end;border-radius:30px 30px 0 0;width:100%;max-height:88vh}.overlay{align-items:flex-end;padding:0}.fab{right:16px}.fab::after{display:none}}
 
 </style>
-
 </head>
 <body>
 <div class="app">
@@ -39,7 +38,6 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
   <form class="globalSearch" id="globalSearch"><span>🔎</span><input id="globalSearchInput" placeholder="搜帖子/用户/表达吧/标签"><button>搜</button></form>
   <button class="iconBtn" data-action="switcher" title="切换账号/表达吧">🔁</button>
   <button class="iconBtn" data-action="nav" data-page="notifications">🔔<span class="dot" id="noticeDot">0</span></button>
-  <button class="iconBtn" data-action="sb-login" title="Supabase登录">🔐</button>
 </header>
 <main id="main">
   <section class="page active" id="page-home"></section>
@@ -76,219 +74,6 @@ const $=(s,r=document)=>r.querySelector(s); const $$=(s,r=document)=>Array.from(
 const now=()=>Date.now();
 const esc=s=>String(s??'').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));
 const uid=p=>p+'_'+Math.random().toString(36).slice(2,9);
-// === Supabase Backend ===
-const SUPABASE_URL = 'https://vokmtzkqstygfyjymqhj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZva210emtxc3R5Z2Z5anltcWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzY5MzMsImV4cCI6MjA5NjIxMjkzM30.Z5j-UyuV99nb-1NNUzxm-4_cXr9peXEZ-dzEuYtPTJU';
-let sbClient = null;
-// Load Supabase SDK dynamically
-(function loadSDK(){
-  // Check window.supabase (UMD global), not local supabase (null)
-  const g = typeof window.supabase !== 'undefined' ? window.supabase : (typeof supabaseJs !== 'undefined' ? supabaseJs : null);
-  if (g) { try { sbClient = g.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e){} return; }
-  const s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-  s.onload = function() {
-    const g2 = window.supabase || supabaseJs;
-    if (g2) { try { sbClient = g2.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); sbInit(); } catch(e){} }
-  };
-  document.head.appendChild(s);
-})();
-
-  // Also try the original way (in case CDN is already cached)
-  try { const SB = supabaseJs || supabase; if (SB) supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn("Supabase init failed:", e); }
-
-async function sbFetch(table) {
-  if (!sbClient) return null;
-  try { const { data } = await sbClient.from(table).select("*"); return data; } catch(e) { console.warn("Supabase fetch error:", e); return null; }
-}
-
-async function sbUpsert(table, rows) {
-  if (!sbClient || !rows?.length) return;
-  try { await sbClient.from(table).upsert(rows, { onConflict: "id", ignoreDuplicates: false }); } catch(e) { console.warn("Supabase upsert error:", e); }
-}
-
-async function sbDelete(table, id) {
-  if (!sbClient || !id) return;
-  try { await sbClient.from(table).delete().eq("id", id); } catch(e) { console.warn("Supabase delete error:", e); }
-}
-
-// Override save() to also write to Supabase
-// Convert camelCase to snake_case for Supabase
-function toSnake(obj) {
-  const result = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const sk = k.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
-    result[sk] = v;
-  }
-  return result;
-}
-function toCamel(obj) {
-  const result = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const ck = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    result[ck] = v;
-  }
-  return result;
-}
-
-// Override save() to convert field names
-const _origSave = save;
-save = function(silent) {
-  _origSave(silent);
-  if (!sbClient) return;
-  setTimeout(async () => {
-    try {
-      if (state.users?.length) await sbClient.from("users").upsert(state.users.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
-      if (state.circles?.length) await sbClient.from("circles").upsert(state.circles.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
-      if (state.posts?.length) await sbClient.from("posts").upsert(state.posts.map(p => toSnake({...p, images: [], comments: undefined})), { onConflict: "id", ignoreDuplicates: false });
-    } catch(e) { console.warn("Supabase save error:", e); }
-  }, 0);
-};
-
-// Also fix sbInit() to properly load data
-async function sbInit() {
-  if (!sbClient) return;
-  try {
-    const { data: users } = await sbClient.from("users").select("*");
-    if (users?.length) state.users = users.map(toCamel);
-
-    const { data: circles } = await sbClient.from("circles").select("*");
-    if (circles?.length) state.circles = circles.map(c => ({...toCamel(c), followed: c.followed || false}));
-
-    const { data: posts } = await sbClient.from("posts").select("*").order("created_at", { ascending: false });
-    if (posts?.length) {
-      state.posts = posts.map(p => ({
-        ...toCamel(p),
-        authorId: p.author_id,
-        circleId: p.circle_id || "c_hall",
-        images: [],
-        comments: [],
-        likedBy: p.liked_by || [],
-        collectedBy: p.collected_by || [],
-        coinedBy: p.coined_by || []
-      }));
-    }
-
-    const { data: sbComments } = await sbClient.from("comments").select("*").order("created_at", { ascending: true });
-    if (sbComments?.length) {
-      const cmap = {};
-      sbComments.forEach(c => {
-        if (!cmap[c.post_id]) cmap[c.post_id] = [];
-        cmap[c.post_id].push({
-          id: c.id, userId: c.user_id, text: c.text,
-          likes: c.likes || 0, likedBy: c.liked_by || [],
-          time: c.created_at ? new Date(c.created_at).getTime() : Date.now(), replies: []
-        });
-      });
-      state.posts.forEach(p => { if (cmap[p.id]) p.comments = cmap[p.id]; });
-    }
-
-    const { data: { user: authUser } } = await sbClient.auth.getUser().catch(() => ({}));
-    if (authUser) {
-      const match = state.users.find(u => u.id === authUser.id);
-      if (match) state.currentUserId = match.id;
-    }
-
-    render();
-  } catch(e) { console.warn("Supabase init error:", e); }
-}// Override load() to try Supabase first
-const _origLoad = load;
-load = function() {
-  const local = _origLoad();
-  if (!sbClient) return local;
-  return local;
-};
-
-// Override save to also save comments
-const _origAddComment = addComment;
-addComment = function(pid, text) {
-  _origAddComment(pid, text);
-  if (!sbClient) return;
-  const p = post(pid);
-  const c = p.comments[0];
-  if (c) {
-    sbUpsert("comments", [{ id: c.id, post_id: pid, user_id: c.userId, text: c.text, likes: 0, liked_by: [] }]);
-  }
-};
-
-// Auth functions
-async function sbSignUp(email, password, name) {
-  if (!sbClient) return toast("Supabase 未连接");
-  const { data, error } = await sbClient.auth.signUp({ email, password, options: { data: { name } } });
-  if (error) return toast("注册失败: " + error.message);
-  toast("注册成功！请查收验证邮件");
-}
-
-async function sbSignIn(email, password) {
-  if (!sbClient) return toast("Supabase 未连接");
-  const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
-  if (error) return toast("登录失败: " + error.message);
-  const user = data.user;
-  // Create or update local user
-  let u = state.users.find(x => x.id === user.id);
-  if (!u) {
-    u = { id: user.id, name: user.user_metadata?.name || email.split("@")[0], avatar: "", major: "", school: "星澈大学", bio: "", coins: 30, followers: 0, following: [], badges: ["新同学"] };
-    state.users.push(u);
-    await sbUpsert("users", [u]);
-  }
-  state.currentUserId = user.id;
-  toast("登录成功！欢迎 " + u.name);
-  await sbInit();
-  render();
-}
-
-async function sbSignOut() {
-  if (!sbClient) return;
-  await sbClient.auth.signOut();
-  state.currentUserId = "me";
-  toast("已退出");
-  render();
-}
-
-
-function openSBAuth() {
-  openModal(`<div class="modalHead"><h3>${window._sbUser ? "账号设置" : "登录 / 注册 Supabase"}</h3><button class="close" data-action="close">x</button></div>${
-    window._sbUser
-      ? `<section class="panel"><p>当前：<b>${esc(window._sbUser.email)}</b></p><div class="heroActions"><button class="pill" data-action="sb-logout">退出登录</button></div></section>`
-      : `<form class="form" id="sbAuthForm"><div class="field"><label>邮箱</label><input id="sbEmail" type="email" placeholder="邮箱" required></div><div class="field"><label>密码（至少6位）</label><input id="sbPassword" type="password" placeholder="密码" required></div><div id="sbAuthError" style="color:var(--red);font-size:13px;margin:4px 0"></div><div class="heroActions"><button class="pill" type="button" id="sbLoginBtn">登录</button><button class="ghost" type="button" id="sbRegisterBtn">注册</button></div></form>`
-  }`);
-  if (window._sbUser) return;
-  const $ = id => document.getElementById(id);
-  $("sbLoginBtn").onclick = async () => {
-    const email = $("sbEmail").value, pwd = $("sbPassword").value;
-    if (!email || !pwd) return;
-    const { error } = await sbClient.auth.signInWithPassword({ email, password: pwd });
-    if (error) { $("sbAuthError").textContent = "失败: " + error.message; return; }
-    await sbInit(); toast("登录成功！"); closeModal();
-  };
-  $("sbRegisterBtn").onclick = async () => {
-    const email = $("sbEmail").value, pwd = $("sbPassword").value;
-    if (!email || !pwd) return;
-    const name = email.split("@")[0];
-    const { error } = await sbClient.auth.signUp({ email, password: pwd, options: { data: { name } } });
-    if (error) { $("sbAuthError").textContent = error.message; return; }
-    $("sbAuthError").textContent = "注册成功！请查收验证邮件（检查垃圾箱）";
-    $("sbAuthError").style.color = "var(--mint)";
-  };
-}
-(async () => {
-  if (!sbClient) return;
-  const { data: { session } } = await sbClient.auth.getSession();
-  if (session?.user) window._sbUser = session.user;
-  sbClient.auth.onAuthStateChange((e, s) => { window._sbUser = s?.user || null; });
-})();
-// Run Supabase init after page loads
-if (supabase) {
-  const _origRender = render;
-  // First render immediately with demo data, then update with Supabase
-  _origRender();
-  render = function() {
-    if (window._sbInitialized) { _origRender(); return; }
-    window._sbInitialized = true;
-    sbInit().then(() => { _origRender(); }).catch(() => _origRender());
-  };
-}
-
 function defaultCircleRules(c){
  const name=(c?.name||'表达吧');
  if(c?.id==='c_tree')return ['匿名不等于攻击','不挂人不泄露隐私','情绪求助优先友善回应'];
@@ -521,9 +306,7 @@ function createCircle(){ openModal(`<div class="modalHead"><h3>建立表达吧</
 function reportPost(id){ const p=post(id); const reason=prompt('举报原因','疑似违规/广告/骚扰'); if(!reason)return; state.reports.unshift({id:uid('r'),postId:id,reason:'举报《'+p.title+'》：'+reason,time:now()}); notify('举报已提交到后台模拟','🚩','report'); save(); render(); }
 function blockUser(id){ if(id===me().id)return; state.blocked ||= []; if(!state.blocked.includes(id))state.blocked.push(id); notify('已屏蔽 '+user(id).name,'🚫','block'); save(); view.page='home'; render(); }
 function signIn(){ const today=new Date().toISOString().slice(0,10); if(state.daily.date===today&&state.daily.signed)return toast('今天已经签到了'); state.daily={date:today,signed:true}; me().coins=(me().coins||0)+10; notify('签到成功，获得 10 枚喵币','✅','task'); save(); render(); toast('签到成功 +10 喵币'); }
-document.addEventListener('click',e=>{ const btn=e.target.closest('[data-action]'); if(!btn)return; const a=btn.dataset.action; if(a==='nav'){view.page=btn.dataset.page; render(); return;} if(a==='switcher'){openSwitcher(); return;} if(a==='switch-account'){state.currentUserId=btn.dataset.id; view.profileId=btn.dataset.id; notify('已切换到 '+me().name,'🔁','account'); save(); closeModal(); view.page='profile'; render(); return;} if(a==='switch-circle'){view.circleId=btn.dataset.id; closeModal(); nav('circle'); return;} if(a==='new-account'){openNewAccount(); return;} if(a==='scroll-x'){const el=document.querySelector(`[data-scroll-id="${btn.dataset.target}"]`); if(el)el.scrollBy({left:Number(btn.dataset.dir||1)*Math.max(180,el.clientWidth*.75),behavior:'smooth'}); return;} if(a==='optimize-storage'){optimizeStateForStorage(true); save(true); toast('已清理大图、旧消息和重复头像缓存'); render(); return;} if(a==='assistant'){nav('assistant'); return;} if(a==='home-tab'){view.tab=btn.dataset.tab; view.page='home'; render(); return;} if(a==='jump-buddy'){view.tab='搭子'; view.board='全部'; view.page='home'; render(); return;} if(a==='hot-scope'){view.hotScope=btn.dataset.scope||'all'; if(view.hotScope==='circle'&&!view.circleId)view.circleId='c_hall'; render(); return;} if(a==='board'){view.board=btn.dataset.board; view.tab='最新'; view.page='home'; render(); return;} if(a==='compose'){openCompose({board:btn.dataset.board||undefined,circleId:btn.dataset.circleId||undefined,anon:btn.dataset.anon==='1'}); return;} if(a==='compose-anon'){openCompose({anon:true,board:'树洞',circleId:'c_tree'}); return;} if(a==='compose-circle'){openCompose({circleId:btn.dataset.id}); return;} if(a==='create-circle'){createCircle(); return;} if(a==='signin'){signIn(); return;} if(a==='auth'||a==='edit-profile'){openAuth(); return;} if(a==='theme'){state.theme=state.theme==='dark'?'light':'dark'; save(); render(); return;} if(a==='profile'){view.profileId=(btn.dataset.id==='me'?state.currentUserId:(btn.dataset.id||state.currentUserId)); view.page='profile'; render(); return;} if(a==='follow'){toggleFollow(btn.dataset.id); return;} if(a==='block'){blockUser(btn.dataset.id); return;} if(a==='circle'){view.circleId=btn.dataset.id; view.page='circle'; render(); return;} if(a==='circle-follow'){toggleCircle(btn.dataset.id); return;} if(a==='detail'){view.detailId=btn.dataset.id; view.page='detail'; closeModal(); render(); return;} if(a==='like'){likePost(btn.dataset.id); return;} if(a==='collect'){collectPost(btn.dataset.id); return;} if(a==='coin'){coinPost(btn.dataset.id); return;} if(a==='share'){navigator.clipboard?.writeText(location.href+'#'+btn.dataset.id); notify('已复制帖子分享信息','↗️','share'); toast('已复制分享信息'); return;} if(a==='report'){reportPost(btn.dataset.id); return;} if(a==='image'){openImage(btn.dataset.post,btn.dataset.index); return;} if(a==='search-word'){doSearch(btn.dataset.query||btn.textContent.replace('#','').trim()); return;} if(a==='search-type'){view.searchType=btn.dataset.type; renderSearch(); return;} if(a==='search-clear'){view.query=''; view.searchType='综合'; renderSearch(); return;} if(a==='clear-history'){state.searchHistory=[]; save(); renderSearch(); return;} if(a==='chat'){openChat(btn.dataset.id||'u_lan'); return;} if(a==='sort-comments'){view.commentSort=view.commentSort==='hot'?'new':'hot'; renderDetail(); return;} if(a==='comment-like'){const p=post(view.detailId); const c=p?.comments?.find(x=>x.id===btn.dataset.cid); if(c){c.likedBy ||= []; const on=c.likedBy.includes(me().id); if(on){c.likedBy=c.likedBy.filter(x=>x!==me().id); c.likes=Math.max(0,(c.likes||0)-1);}else{c.likedBy.push(me().id); c.likes=(c.likes||0)+1;} save(); renderDetail();} return;} if(a==='edit-circle-rules'){editCircleRules(btn.dataset.id); return;} if(a==='reply'){const text=prompt('回复这条评论'); if(text){ const p=post(view.detailId); const c=p.comments.find(x=>x.id===btn.dataset.cid); c.replies ||= []; c.replies.push({id:uid('rp'),userId:me().id,text,time:now(),likes:0}); notify('你回复了一条评论','💬','reply'); save(); renderDetail(); } return;} if(a==='sb-login'){openSBAuth(); return;}
-if(a==='sb-logout'){sbClient?.auth.signOut(); state.currentUserId='me'; window._sbUser=null; toast('已退出'); sbInit(); return;}
-if(a==='close'){closeModal(); return;} if(a==='remove-compose-img'){const i=Number(btn.dataset.index); composeImages.splice(i,1); $('#composePreview').innerHTML=composeImages.map((data,j)=>`<span class="previewWrap"><img class="preview" src="${data}"><button type="button" class="removeImg" data-action="remove-compose-img" data-index="${j}">×</button></span>`).join(''); $('#uploadStatus').textContent=`已准备 ${composeImages.length} 张图片`; return;} if(a==='clear-notices'){state.notifications=[]; save(); renderNotifications(); return;} if(a==='notice-open'){if(btn.dataset.id){view.detailId=btn.dataset.id; nav('detail');} return;} if(a==='report-done'){state.reports=state.reports.filter(r=>r.id!==btn.dataset.id); notify('后台已处理一条举报','🛡️','admin'); save(); renderAdmin(); return;} if(a==='make-hot'){const p={id:uid('p'),title:'官方活动：晒出你的期末续命瞬间',body:'带 #期末续命 标签发帖，点赞前十进入精华榜。',authorId:'u_lan',circleId:'c_hall',board:'生活',tags:['期末续命','活动','精华'],images:[poster('期末续命','🍵','#fff0fa','#e7fbff')],created:now(),likes:32,coins:8,collects:12,views:520,likedBy:[],collectedBy:[],coinedBy:[],essence:true,comments:[]}; state.posts.unshift(p); notify('运营活动已生成并推到大厅','🔥','admin'); save(); view.page='home'; view.tab='推荐'; render(); return;} if(a==='make-notice'){notify('系统通知：今晚 22:00 以后树洞开启匿名保护提醒','📣','system'); render(); return;} if(a==='reset-demo'){if(confirm('确定重置 V15.2 演示数据？')){localStorage.removeItem(KEY); OLD_KEYS.forEach(k=>localStorage.removeItem(k)); state=defaultState(); view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null}; render();} return;} });
+document.addEventListener('click',e=>{ const btn=e.target.closest('[data-action]'); if(!btn)return; const a=btn.dataset.action; if(a==='nav'){view.page=btn.dataset.page; render(); return;} if(a==='switcher'){openSwitcher(); return;} if(a==='switch-account'){state.currentUserId=btn.dataset.id; view.profileId=btn.dataset.id; notify('已切换到 '+me().name,'🔁','account'); save(); closeModal(); view.page='profile'; render(); return;} if(a==='switch-circle'){view.circleId=btn.dataset.id; closeModal(); nav('circle'); return;} if(a==='new-account'){openNewAccount(); return;} if(a==='scroll-x'){const el=document.querySelector(`[data-scroll-id="${btn.dataset.target}"]`); if(el)el.scrollBy({left:Number(btn.dataset.dir||1)*Math.max(180,el.clientWidth*.75),behavior:'smooth'}); return;} if(a==='optimize-storage'){optimizeStateForStorage(true); save(true); toast('已清理大图、旧消息和重复头像缓存'); render(); return;} if(a==='assistant'){nav('assistant'); return;} if(a==='home-tab'){view.tab=btn.dataset.tab; view.page='home'; render(); return;} if(a==='jump-buddy'){view.tab='搭子'; view.board='全部'; view.page='home'; render(); return;} if(a==='hot-scope'){view.hotScope=btn.dataset.scope||'all'; if(view.hotScope==='circle'&&!view.circleId)view.circleId='c_hall'; render(); return;} if(a==='board'){view.board=btn.dataset.board; view.tab='最新'; view.page='home'; render(); return;} if(a==='compose'){openCompose({board:btn.dataset.board||undefined,circleId:btn.dataset.circleId||undefined,anon:btn.dataset.anon==='1'}); return;} if(a==='compose-anon'){openCompose({anon:true,board:'树洞',circleId:'c_tree'}); return;} if(a==='compose-circle'){openCompose({circleId:btn.dataset.id}); return;} if(a==='create-circle'){createCircle(); return;} if(a==='signin'){signIn(); return;} if(a==='auth'||a==='edit-profile'){openAuth(); return;} if(a==='theme'){state.theme=state.theme==='dark'?'light':'dark'; save(); render(); return;} if(a==='profile'){view.profileId=(btn.dataset.id==='me'?state.currentUserId:(btn.dataset.id||state.currentUserId)); view.page='profile'; render(); return;} if(a==='follow'){toggleFollow(btn.dataset.id); return;} if(a==='block'){blockUser(btn.dataset.id); return;} if(a==='circle'){view.circleId=btn.dataset.id; view.page='circle'; render(); return;} if(a==='circle-follow'){toggleCircle(btn.dataset.id); return;} if(a==='detail'){view.detailId=btn.dataset.id; view.page='detail'; closeModal(); render(); return;} if(a==='like'){likePost(btn.dataset.id); return;} if(a==='collect'){collectPost(btn.dataset.id); return;} if(a==='coin'){coinPost(btn.dataset.id); return;} if(a==='share'){navigator.clipboard?.writeText(location.href+'#'+btn.dataset.id); notify('已复制帖子分享信息','↗️','share'); toast('已复制分享信息'); return;} if(a==='report'){reportPost(btn.dataset.id); return;} if(a==='image'){openImage(btn.dataset.post,btn.dataset.index); return;} if(a==='search-word'){doSearch(btn.dataset.query||btn.textContent.replace('#','').trim()); return;} if(a==='search-type'){view.searchType=btn.dataset.type; renderSearch(); return;} if(a==='search-clear'){view.query=''; view.searchType='综合'; renderSearch(); return;} if(a==='clear-history'){state.searchHistory=[]; save(); renderSearch(); return;} if(a==='chat'){openChat(btn.dataset.id||'u_lan'); return;} if(a==='sort-comments'){view.commentSort=view.commentSort==='hot'?'new':'hot'; renderDetail(); return;} if(a==='comment-like'){const p=post(view.detailId); const c=p?.comments?.find(x=>x.id===btn.dataset.cid); if(c){c.likedBy ||= []; const on=c.likedBy.includes(me().id); if(on){c.likedBy=c.likedBy.filter(x=>x!==me().id); c.likes=Math.max(0,(c.likes||0)-1);}else{c.likedBy.push(me().id); c.likes=(c.likes||0)+1;} save(); renderDetail();} return;} if(a==='edit-circle-rules'){editCircleRules(btn.dataset.id); return;} if(a==='reply'){const text=prompt('回复这条评论'); if(text){ const p=post(view.detailId); const c=p.comments.find(x=>x.id===btn.dataset.cid); c.replies ||= []; c.replies.push({id:uid('rp'),userId:me().id,text,time:now(),likes:0}); notify('你回复了一条评论','💬','reply'); save(); renderDetail(); } return;} if(a==='close'){closeModal(); return;} if(a==='remove-compose-img'){const i=Number(btn.dataset.index); composeImages.splice(i,1); $('#composePreview').innerHTML=composeImages.map((data,j)=>`<span class="previewWrap"><img class="preview" src="${data}"><button type="button" class="removeImg" data-action="remove-compose-img" data-index="${j}">×</button></span>`).join(''); $('#uploadStatus').textContent=`已准备 ${composeImages.length} 张图片`; return;} if(a==='clear-notices'){state.notifications=[]; save(); renderNotifications(); return;} if(a==='notice-open'){if(btn.dataset.id){view.detailId=btn.dataset.id; nav('detail');} return;} if(a==='report-done'){state.reports=state.reports.filter(r=>r.id!==btn.dataset.id); notify('后台已处理一条举报','🛡️','admin'); save(); renderAdmin(); return;} if(a==='make-hot'){const p={id:uid('p'),title:'官方活动：晒出你的期末续命瞬间',body:'带 #期末续命 标签发帖，点赞前十进入精华榜。',authorId:'u_lan',circleId:'c_hall',board:'生活',tags:['期末续命','活动','精华'],images:[poster('期末续命','🍵','#fff0fa','#e7fbff')],created:now(),likes:32,coins:8,collects:12,views:520,likedBy:[],collectedBy:[],coinedBy:[],essence:true,comments:[]}; state.posts.unshift(p); notify('运营活动已生成并推到大厅','🔥','admin'); save(); view.page='home'; view.tab='推荐'; render(); return;} if(a==='make-notice'){notify('系统通知：今晚 22:00 以后树洞开启匿名保护提醒','📣','system'); render(); return;} if(a==='reset-demo'){if(confirm('确定重置 V15.2 演示数据？')){localStorage.removeItem(KEY); OLD_KEYS.forEach(k=>localStorage.removeItem(k)); state=defaultState(); view={page:'home',tab:'推荐',board:'全部',query:'',searchType:'综合',hotScope:'all',commentSort:'hot',circleId:null,profileId:'me',detailId:null}; render();} return;} });
 document.addEventListener('submit',e=>{ if(e.target.id==='globalSearch'){ e.preventDefault(); doSearch($('#globalSearchInput').value); } });
 $('#globalSearchInput').addEventListener('focus',()=>{ if(view.page!=='search'){view.page='search'; render();} });
 $('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeModal(); });
