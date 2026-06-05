@@ -97,21 +97,84 @@ async function sbDelete(table, id) {
 }
 
 // Override save() to also write to Supabase
-const _origSave = save;
+// Convert camelCase to snake_case for Supabase
+function toSnake(obj) {
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const sk = k.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+    result[sk] = v;
+  }
+  return result;
+}
+function toCamel(obj) {
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const ck = k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    result[ck] = v;
+  }
+  return result;
+}
+
+// Override save() to convert field names
 save = function(silent) {
-  if (!supabase) return _origSave(silent);
   _origSave(silent);
-  // Async push to Supabase
+  if (!supabase) return;
   setTimeout(async () => {
     try {
-      await sbUpsert("users", state.users);
-      await sbUpsert("circles", state.circles);
-      await sbUpsert("posts", state.posts);
-    } catch(e) { console.warn("Supabase sync error"); }
+      if (state.users?.length) await supabase.from("users").upsert(state.users.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
+      if (state.circles?.length) await supabase.from("circles").upsert(state.circles.map(toSnake), { onConflict: "id", ignoreDuplicates: false });
+      if (state.posts?.length) await supabase.from("posts").upsert(state.posts.map(p => toSnake({...p, images: [], comments: undefined})), { onConflict: "id", ignoreDuplicates: false });
+    } catch(e) { console.warn("Supabase save error:", e); }
   }, 0);
 };
 
-// Override load() to try Supabase first
+// Also fix sbInit() to properly load data
+async function sbInit() {
+  if (!supabase) return;
+  try {
+    const { data: users } = await supabase.from("users").select("*");
+    if (users?.length) state.users = users.map(toCamel);
+
+    const { data: circles } = await supabase.from("circles").select("*");
+    if (circles?.length) state.circles = circles.map(c => ({...toCamel(c), followed: c.followed || false}));
+
+    const { data: posts } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
+    if (posts?.length) {
+      state.posts = posts.map(p => ({
+        ...toCamel(p),
+        authorId: p.author_id,
+        circleId: p.circle_id || "c_hall",
+        images: [],
+        comments: [],
+        likedBy: p.liked_by || [],
+        collectedBy: p.collected_by || [],
+        coinedBy: p.coined_by || []
+      }));
+    }
+
+    const { data: sbComments } = await supabase.from("comments").select("*").order("created_at", { ascending: true });
+    if (sbComments?.length) {
+      const cmap = {};
+      sbComments.forEach(c => {
+        if (!cmap[c.post_id]) cmap[c.post_id] = [];
+        cmap[c.post_id].push({
+          id: c.id, userId: c.user_id, text: c.text,
+          likes: c.likes || 0, likedBy: c.liked_by || [],
+          time: c.created_at ? new Date(c.created_at).getTime() : Date.now(), replies: []
+        });
+      });
+      state.posts.forEach(p => { if (cmap[p.id]) p.comments = cmap[p.id]; });
+    }
+
+    const { data: { user: authUser } } = await supabase.auth.getUser().catch(() => ({}));
+    if (authUser) {
+      const match = state.users.find(u => u.id === authUser.id);
+      if (match) state.currentUserId = match.id;
+    }
+
+    render();
+  } catch(e) { console.warn("Supabase init error:", e); }
+}// Override load() to try Supabase first
 const _origLoad = load;
 load = function() {
   const local = _origLoad();
