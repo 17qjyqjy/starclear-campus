@@ -32,7 +32,7 @@ html,body{overflow-x:hidden;scroll-behavior:smooth}body{position:relative}body::
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js">};\n
 // ===== SUPABASE BOOT =====
-(function sbBoot(){
+(function sbBoot(){document.getElementById("loading-screen").style.display="grid";
   var ar = document.getElementById("auth-root");
   var ap = document.getElementById("app-root");
   if (!ar || !ap) return;
@@ -86,14 +86,30 @@ document.getElementById("sb-auth-register").addEventListener("click", async func
 });
 \n</script>
 </head>
-<body><div id="auth-root" style="display:none;width:min(100%,540px);margin:40px auto;padding:0 14px">
-<section class="hero" style="margin:8px 0 14px;position:relative;overflow:hidden;background:linear-gradient(135deg,#fff,#fff0fa 50%,#e8fbff);border:1px solid rgba(255,255,255,.8);border-radius:34px;padding:14px;box-shadow:var(--shadow)">
-<div class="heroMain" style="position:relative;z-index:1;display:flex;gap:14px;align-items:center">
-<div style="width:80px;height:80px;border-radius:24px;background:linear-gradient(135deg,#ff6db7,#8c7cff);display:grid;place-items:center;font-size:40px;border:4px solid #fff;box-shadow:0 13px 25px rgba(255,109,183,.24);flex:0 0 auto">🌟</div>
-<div><span class="badge">星澜校园</span>
-<h1 style="font-size:23px;line-height:1.15;margin:8px 0 8px;color:var(--text)">欢迎回来</h1>
-<p style="margin:0;color:#645d72;font-size:13px;line-height:1.55">登录后即可浏览、发帖、互动，数据实时同步</p>
+<body><div id="loading-screen" style="display:none;position:fixed;inset:0;z-index:999;background:radial-gradient(circle at 2% 0,#ffe2f1 0 170px,transparent 340px),radial-gradient(circle at 100% 5%,#d9f9ff 0 180px,transparent 360px),linear-gradient(145deg,#fff7fb,#eefcff);display:grid;place-items:center"><div style="text-align:center"><div style="width:60px;height:60px;border-radius:22px;background:linear-gradient(135deg,#ff6db7,#8c7cff);margin:0 auto 16px;display:grid;place-items:center;font-size:28px;border:3px solid #fff;box-shadow:0 10px 24px rgba(130,72,60,.18)">&#x1f31f;</div><b style="font-size:18px;display:block;margin-bottom:6px">星澜校园表达吧</b><p style="color:var(--muted);font-size:13px">加载中...</p></div></div><div id="auth-root" style="display:none">
+<div style="width:min(100%,540px);margin:0 auto;padding:0 14px">
+<div class="topbar" style="margin:0 -14px 24px;padding:12px 14px;display:flex;gap:10px;align-items:center;background:linear-gradient(180deg,rgba(255,247,251,.98),rgba(255,247,251,.88));backdrop-filter:blur(18px)">
+<div style="width:43px;height:43px;border-radius:16px;background:linear-gradient(135deg,#ff6db7,#8c7cff);display:grid;place-items:center;font-size:22px;border:3px solid #fff;box-shadow:0 10px 24px rgba(130,72,60,.18)">&#x1f31f;</div>
+<div><b style="font-size:17px;display:block">星澜校园表达吧</b><small style="color:var(--muted);font-size:10px">校园社区</small></div>
+</div>
+<section class="hero" style="margin:0 0 20px;overflow:hidden;background:linear-gradient(135deg,#fff,#fff0fa 50%,#e8fbff);border:1px solid rgba(255,255,255,.8);border-radius:34px;padding:18px;box-shadow:var(--shadow)">
+<div style="display:flex;gap:16px;align-items:center">
+<div style="width:90px;height:90px;border-radius:28px;overflow:hidden;flex:0 0 90px;border:4px solid #fff;box-shadow:0 17px 34px rgba(130,72,60,.2);background:linear-gradient(135deg,#ffe2f1,#d9f9ff);display:grid;place-items:center;font-size:42px">&#x1f393;</div>
+<div><span class="badge">欢迎回来</span>
+<h1 style="font-size:23px;line-height:1.2;margin:8px 0 6px;color:var(--text)">登录校园社区</h1>
+<p style="margin:0;color:#645d72;font-size:13px;line-height:1.5">发帖、互动、找搭子</p>
 </div></div></section>
+<div style="background:var(--card);border:1px solid var(--line);border-radius:28px;padding:20px;box-shadow:var(--shadow)">
+<form id="sb-auth-form">
+<div class="field"><label>邮箱</label><input id="sb-auth-email" type="email" placeholder="输入你的校园邮箱" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
+<div class="field" style="margin-top:14px"><label>密码</label><input id="sb-auth-pass" type="password" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
+<div style="display:flex;gap:10px;margin-top:18px">
+<button type="submit" style="flex:1;border:0;border-radius:18px;padding:14px;background:linear-gradient(135deg,#ff6db7,#8c7cff);color:#fff;font-weight:1000;cursor:pointer;font-size:16px;box-shadow:0 13px 25px rgba(255,109,183,.24)">登录</button>
+<button id="sb-auth-register" type="button" style="flex:1;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:18px;padding:14px;font-weight:1000;cursor:pointer;font-size:16px">注册</button>
+</div></form>
+<div id="sb-auth-error" style="color:#ff5570;font-weight:900;font-size:14px;margin-top:14px;display:none;text-align:center"></div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);text-align:center"><p style="margin:0;color:var(--muted);font-size:12px;font-weight:900">星澜校园表达吧 V15.2</p></div>
+</div></div></div></div></section>
 <div style="background:var(--card);border:1px solid var(--line);border-radius:26px;padding:20px;box-shadow:var(--shadow)">
 <form id="sb-auth-form">
 <div class="field"><label>邮箱</label><input id="sb-auth-email" type="email" placeholder="输入你的校园邮箱" required style="width:100%;border:1px solid var(--line);background:var(--solid);border-radius:18px;padding:12px;outline:0;font:inherit;color:var(--text);box-sizing:border-box"></div>
