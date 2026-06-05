@@ -80,7 +80,7 @@ const uid=p=>p+'_'+Math.random().toString(36).slice(2,9);
 const SUPABASE_URL = 'https://vokmtzkqstygfyjymqhj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZva210emtxc3R5Z2Z5anltcWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzY5MzMsImV4cCI6MjA5NjIxMjkzM30.Z5j-UyuV99nb-1NNUzxm-4_cXr9peXEZ-dzEuYtPTJU';
 let supabase = null;
-try { supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn("Supabase init failed:", e); }
+try { const SB = typeof supabaseJs !== 'undefined' ? supabaseJs : (typeof supabase !== 'undefined' ? supabase : null); if (SB) supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn("Supabase init failed:", e); }
 
 async function sbFetch(table) {
   if (!supabase) return null;
@@ -265,6 +265,8 @@ function openSBAuth() {
 // Run Supabase init after page loads
 if (supabase) {
   const _origRender = render;
+  // First render immediately with demo data, then update with Supabase
+  _origRender();
   render = function() {
     if (window._sbInitialized) { _origRender(); return; }
     window._sbInitialized = true;
