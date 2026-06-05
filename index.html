@@ -363,13 +363,13 @@ function optimizeStateForStorage(aggressive=false){
 }
 function storageInfo(){ const packed=JSON.stringify(packState(state,false)); const used=packed.length; const mb=(used/1024/1024).toFixed(2); const pct=Math.min(100,Math.round(used/5000000*100)); return {used,mb,pct}; }
 function save(silent=false){ optimizeStateForStorage(false); try{ localStorage.setItem(KEY,JSON.stringify(packState(state,false))); }catch(e){} if(__sbSaveTimer)clearTimeout(__sbSaveTimer); __sbSaveTimer=setTimeout(function(){ sbSave(packState(state,false)); },800); }
-function me(){ return state.users.find(u=>u.id===state.currentUserId)||state.users[0]; }
+function me(){ if(!state||!state.users)return{id:"guest",name:"同学",avatar:""}; return state.users.find(u=>u.id===state.currentUserId)||state.users[0]; }
 function user(id){ return state.users.find(u=>u.id===id)||state.users.find(u=>u.id==='u_lan')||state.users[0]; }
 function circle(id){ return state.circles.find(c=>c.id===id)||state.circles[0]; }
 function post(id){ return state.posts.find(p=>p.id===id); }
 function postTime(p){ return Number(p.created)||0; }
 function isFollowing(uid){ return (me().following||[]).includes(uid); }
-function unreadCount(){ let n=(state.notifications||[]).filter(x=>!x.read).length; Object.values(state.messages||{}).forEach(arr=>arr.forEach(m=>{if(m.from!=='me'&&!m.read)n++})); return n; }
+function unreadCount(){ if(!state)return 0; let n=(state.notifications||[]).filter(x=>!x.read).length; Object.values(state.messages||{}).forEach(arr=>arr.forEach(m=>{if(m.from!=='me'&&!m.read)n++})); return n; }
 function notify(text,icon='🔔',type='system'){ state.notifications.unshift({id:uid('n'),type,icon,text,time:now(),read:false}); state.notifications=state.notifications.slice(0,80); save(); updateBadges(); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>t.classList.remove('show'),1800); }
 function timeAgo(ts){ const d=Math.max(1,Math.floor((now()-ts)/1000)); if(d<60)return d+'秒前'; if(d<3600)return Math.floor(d/60)+'分钟前'; if(d<86400)return Math.floor(d/3600)+'小时前'; return Math.floor(d/86400)+'天前'; }
@@ -384,7 +384,7 @@ try{
   var p=document.getElementById('page-home');
   if(p)p.innerHTML='<div style="padding:20px;color:#e33;background:#fff;border-radius:16px;margin:16px"><h2>Render Error</h2><pre>'+e.message+'</pre><pre style="font-size:12px">'+(e.stack||'')+'</pre></div>';
 } }
-function updateBadges(){ const d=$('#noticeDot'); if(d)d.textContent=unreadCount(); const top=$('#topAvatar'); if(top)top.src=me().avatar||AVATAR; document.documentElement.dataset.theme=state.theme||'light'; }
+function updateBadges(){ if(!state)return; const d=$('#noticeDot'); if(d)d.textContent=unreadCount(); const top=$('#topAvatar'); if(top)top.src=me().avatar||AVATAR; document.documentElement.dataset.theme=state.theme||'light'; }
 function render(){ activatePage(view.page); const input=$('#globalSearchInput'); if(input && view.page!=='search') input.value=view.query||''; if(view.page==='home')renderHome(); if(view.page==='search')renderSearch(); if(view.page==='circles')renderCircles(); if(view.page==='circle')renderCircle(); if(view.page==='messages')renderMessages(); if(view.page==='profile')renderProfile(); if(view.page==='detail')renderDetail(); if(view.page==='notifications')renderNotifications(); if(view.page==='admin')renderAdmin(); if(view.page==='assistant')renderAssistant(); enhanceHorizontalScroll(); }
 function matchBoard(p){ return view.board==='全部'||p.board===view.board; }
 function visiblePosts(){
