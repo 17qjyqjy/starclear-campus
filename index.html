@@ -30,7 +30,7 @@ document.getElementById("f").addEventListener("submit",async function(e){
   try{
     var r=await fetch(SU+"/auth/v1/token?grant_type=password",{method:"POST",headers:{"apikey":SA,"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});
     var d=await r.json();
-    if(d.access_token){localStorage.setItem("sbt",d.access_token);window.location.href="/app.html"}
+    if(d.access_token){localStorage.setItem("sbt",d.access_token);window.location.href="https://cdn.jsdelivr.net/gh/17qjyqjy/starclear-campus/app.html"}
     else{document.getElementById("err").textContent=d.msg||d.error||"登录失败";document.getElementById("err").style.display="block"}
   }catch(ex){document.getElementById("err").textContent=ex.message;document.getElementById("err").style.display="block"}
 });
@@ -42,7 +42,7 @@ document.getElementById("r").addEventListener("click",async function(){
   try{
     var r=await fetch(SU+"/auth/v1/signup",{method:"POST",headers:{"apikey":SA,"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});
     var d=await r.json();
-    if(d.access_token){localStorage.setItem("sbt",d.access_token);window.location.href="/app.html"}
+    if(d.access_token){localStorage.setItem("sbt",d.access_token);window.location.href="https://cdn.jsdelivr.net/gh/17qjyqjy/starclear-campus/app.html"}
     else{document.getElementById("err").textContent=d.msg||d.error||"注册失败";document.getElementById("err").style.display="block"}
   }catch(ex){document.getElementById("err").textContent=ex.message;document.getElementById("err").style.display="block"}
 });
